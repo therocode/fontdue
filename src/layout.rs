@@ -2,10 +2,7 @@ pub use crate::unicode::CharacterData;
 
 use crate::unicode::{read_utf8, LinebreakData, Linebreaker, LINEBREAK_NONE};
 use crate::Font;
-use crate::{
-    platform::{ceil, floor},
-    Metrics,
-};
+use crate::{platform::floor, Metrics};
 use alloc::vec::*;
 use core::borrow::Borrow;
 use core::hash::{Hash, Hasher};
@@ -295,13 +292,13 @@ pub struct Layout<U: Copy + Clone = ()> {
     line_metrics: Vec<LinePosition>,
     /// The x position the next glyph starts at.
     current_pos: f32,
-    /// The ceil(ascent) of the current style.
+    /// The ascent of the current style.
     current_ascent: f32,
-    /// The ceil(descent) of the current style.
+    /// The descent of the current style.
     current_descent: f32,
-    /// The ceil(line_gap) of the current style.
+    /// The line_gap of the current style.
     current_line_gap: f32,
-    /// The ceil(new_line_size) of the current style.
+    /// The new_line_size of the current style.
     current_new_line: f32,
     /// The x position the current line starts at.
     start_pos: f32,
@@ -442,10 +439,14 @@ impl<'a, U: Copy + Clone> Layout<U> {
         let font: &Font = &fonts[style.font_index].borrow();
 
         if let Some(metrics) = font.horizontal_line_metrics(style.px) {
-            self.current_ascent = ceil(metrics.ascent);
-            self.current_new_line = ceil(metrics.new_line_size);
-            self.current_descent = ceil(metrics.descent);
-            self.current_line_gap = ceil(metrics.line_gap);
+            // self.current_ascent = ceil(metrics.ascent);
+            // self.current_new_line = ceil(metrics.new_line_size);
+            // self.current_descent = ceil(metrics.descent);
+            // self.current_line_gap = ceil(metrics.line_gap);
+            self.current_ascent = metrics.ascent;
+            self.current_new_line = metrics.new_line_size;
+            self.current_descent = metrics.descent;
+            self.current_line_gap = metrics.line_gap;
             if let Some(line) = self.line_metrics.last_mut() {
                 if self.current_ascent > line.max_ascent {
                     line.max_ascent = self.current_ascent;
