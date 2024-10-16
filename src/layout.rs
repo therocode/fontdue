@@ -159,6 +159,8 @@ pub struct GlyphPosition<U: Copy + Clone = ()> {
     pub byte_offset: usize,
     /// Additional metadata associated with the character used to generate this glyph.
     pub char_data: CharacterData,
+    /// Is this an emoji glyph?
+    pub is_emoji: bool,
     /// Custom user data associated with the text styled used to generate this glyph.
     pub user_data: U,
 }
@@ -430,7 +432,13 @@ impl<'a, U: Copy + Clone> Layout<U> {
     /// Characters from the input string can only be omitted from the output, they are never
     /// reordered. The output buffer will always contain characters in the order they were defined
     /// in the styles.
-    pub fn append<T: Borrow<Font>>(&mut self, fonts: &[T], style: &TextStyle<U>) {
+    pub fn append<T: Borrow<Font>>(
+        &mut self,
+        fonts: &[T],
+        style: &TextStyle<U>,
+        emoji_byte_offsets: &[usize],
+        emoji_width_factor: f32,
+    ) {
         // The first layout pass requires some text.
         if style.text.is_empty() {
             return;
@@ -464,9 +472,20 @@ impl<'a, U: Copy + Clone> Layout<U> {
         }
 
         let mut byte_offset = 0;
+
+        let mut next_emoji_byte_offset = emoji_byte_offsets.get(0);
+        let mut next_emoji_byte_offset_i = 1;
+
         let override_max_width = self.override_max_width.take().unwrap_or(self.max_width);
         while byte_offset < style.text.len() {
             let prev_byte_offset = byte_offset;
+
+            let is_emoji = Some(&byte_offset) == next_emoji_byte_offset;
+            if is_emoji {
+                next_emoji_byte_offset = emoji_byte_offsets.get(next_emoji_byte_offset_i);
+                next_emoji_byte_offset_i += 1;
+            }
+
             let character = read_utf8(style.text.as_bytes(), &mut byte_offset);
             let linebreak = self.linebreaker.next(character).mask(self.wrap_mask);
             let glyph_index = font.lookup_glyph_index(character);
@@ -476,7 +495,13 @@ impl<'a, U: Copy + Clone> Layout<U> {
             } else {
                 Metrics::default()
             };
-            let advance_whole = metrics.advance_width;
+
+            let advance_whole = if is_emoji {
+                emoji_width_factor * style.px
+            } else {
+                metrics.advance_width
+            };
+
             let advance = advance_whole;
 
             if linebreak >= self.linebreak_prev {
@@ -550,6 +575,7 @@ impl<'a, U: Copy + Clone> Layout<U> {
                 width: metrics.width,
                 height: metrics.height,
                 char_data,
+                is_emoji,
                 user_data: style.user_data,
             });
             self.current_pos += advance;
