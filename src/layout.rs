@@ -484,7 +484,34 @@ impl<'a, U: Copy + Clone> Layout<U> {
             }
 
             let character = read_utf8(style.text.as_bytes(), &mut byte_offset);
-            let linebreak = self.linebreaker.next(character).mask(self.wrap_mask);
+
+            // There is a problem where if a line starts on a space, it will treat it
+            // as a word wrap point, which in some cases makes the wrapped line not fit.
+            //
+            // Consider the case of this text:  |' dw'|. The line breaker will consider
+            // that first ' ' a valid point to wrap the line if the box shrinks. However,
+            // when the box shrinks, this is what happens:
+            // |' '|
+            // |'dw'
+            // And since the 'dw' is wider than ' ', the 'dw' will poke out of the box.
+            // The general violated rule is that if something is line-broke to a new line,
+            // that something should never be wider than the width of the line that caused it
+            // to line-break because then it might poke out. So, we clearly don't want a single
+            // ' ' at the start of the line to be a valid line break point.
+            //
+            // To fix this, we detect if the line starts on a ' ' and if it does, we don't send
+            // ' ' to the line breaker, but we instead send a non-whitespace character like 'm'
+            // so that it doesn't treat it as a valid line break point.
+            let problematic_space = self.linebreak_pos == 0.0 && character == ' ';
+
+            let linebreak = self
+                .linebreaker
+                .next(if problematic_space {
+                    'm'
+                } else {
+                    character
+                })
+                .mask(self.wrap_mask);
             let glyph_index = font.lookup_glyph_index(character);
             let char_data = CharacterData::classify(character, glyph_index);
             let metrics = if !char_data.is_control() {
